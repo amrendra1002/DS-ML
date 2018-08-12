@@ -1,0 +1,95 @@
+---
+title: "Practical Machine Learning Assignment- Exercise Class Prediction"
+author: "Amrendra Kumar"
+date: "12 August 2018"
+output: html_document
+---
+#### Load packages
+```{r}
+library(randomForest)
+library(caret)
+```
+
+
+#### Load Training Data from URL
+```{r}
+TrainURL="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+data <- read.csv(url(TrainURL))
+dim(data)
+```
+
+#### Replace blank with NA
+```{r}
+data[data==""] <- NA
+```
+
+#### Identifying columns that has NA value in more than 50% records
+```{r}
+i=0
+x=c()
+for(i in 1:ncol(data)){
+  if (sum(is.na(data[i]))<nrow(data)/2) {
+    x=append(x,names(data[i]))
+  }
+}
+```
+#### Create a new dataset using the training data with the columns identified in the above step
+```{r}
+data= data[,x]
+dim(data)
+```
+
+#### Split data into train(80%) and test(20%)
+```{r}
+rows=seq(1,nrow(data),1)
+train_rows=sample(x=rows,size=(0.8*nrow(data)))
+train_data=data[train_rows,]
+test_data=data[-train_rows,]
+```
+
+#### Create model using random forest as it is one of the best model used for miulti classification. Exclude variable X and user_name as these have no significance in the prediction.
+```{r}
+attach(train_data)
+model = randomForest(classe~. -X -user_name, data=train_data, metric="Accuracy", importance=TRUE, ntree=500)
+```
+
+#### Order the predictors based on their importance.
+```{r}
+df_imp=importance(model)[,6:7]
+df_imp=as.data.frame((df_imp))
+df_imp[order(-df_imp$MeanDecreaseAccuracy),]
+```
+#### Create a model using top 10 predictors based on their importance and validate the model using the test data.
+```{r}
+model1=randomForest(classe~yaw_belt+ num_window+ roll_belt + pitch_belt+  magnet_dumbbell_y + magnet_dumbbell_z + accel_dumbbell_y+ pitch_forearm + roll_arm + roll_dumbbell, metric="Accuracy" ,ntree=500)
+model1
+pred1=predict(model1,test_data)
+confusionMatrix(pred1,test_data$classe)
+```
+
+#### K-fold Cross Validation
+```{r}
+train_control <- trainControl(method="cv", number=10)
+
+cv_model1 <- train(classe~yaw_belt+ num_window+ roll_belt + pitch_belt+  magnet_dumbbell_y + magnet_dumbbell_z + accel_dumbbell_y+ pitch_forearm + roll_arm+ roll_dumbbell, data=train_data, trControl=train_control, method="rf", metric="Accuracy", ntree=500)
+cv_model1
+cv_pred1=predict(cv_model1,test_data)
+confusionMatrix(cv_pred1,test_data$classe)$overall[1]
+```
+
+#### Create another model using top 4 predictors based on their importance and test the model using the test data.
+```{r}
+model2=randomForest(classe~yaw_belt+ num_window+ roll_belt + pitch_belt ,data=train_data, metric="Accuracy", ntree=500)
+model2
+pred2=predict(model2,test_data)
+confusionMatrix(pred2,test_data$classe)
+```
+#### K-fold cross validation
+```{r}
+cv_model2 <- train(classe~yaw_belt+ num_window+ roll_belt + pitch_belt, data=train_data, trControl=train_control, method="rf" , metric="Accuracy", ntree=500)
+cv_model2
+cv_pred2=predict(cv_model2,test_data)
+confusionMatrix(cv_pred2,test_data$classe)$overall[1]
+```
+
+#### The prediction accuracy of model cv_model2 is the highest so we will use it for predicting the unseen data.
